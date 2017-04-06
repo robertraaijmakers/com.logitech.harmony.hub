@@ -43,12 +43,13 @@ var self = module.exports = {
                         callback(null, []);
                         return;
                     }
+					
+					console.log(args.args.device.commands);
 
                     var listOfControlGroups = [];
-                    args.args.device.controlGroup.forEach(function(controlGroup) {
-                        if (args.query.length === 0 ||
-                            controlGroup.name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
-                            listOfControlGroups.push(controlGroup);
+                    args.args.device.commands.forEach(function(controlGroup) {
+                        if (args.query.length === 0 || controlGroup.name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
+							listOfControlGroups.push(controlGroup);
                         }
                     });
 
@@ -59,19 +60,18 @@ var self = module.exports = {
             .on("action.send_command_to_device.action.autocomplete",
                 function(callback, args) {
                     //Homey.log(JSON.stringify(args));
-                    if (args.args.device.length === 0 || args.args.controlGroup.length === 0) {
+                    if (args.args.device.length === 0 || args.args.commands.length === 0) {
                         callback(null, []);
                         return;
                     }
 
-                    var actions = [];
-                    args.args.controlGroup.function.forEach(function(action) {
-                        if (args.query.length === 0 ||
-                            action.label.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
-                            action.name = action.label;
-                            actions.push(action);
-                        }
-                    });
+                    // var actions = [];
+                    // args.args.commands.function.forEach(function(action) {
+                        // if (args.query.length === 0 || action.label.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
+                            // action.name = action.label;
+                            // actions.push(action);
+                        // }
+                    // });
 
                     callback(null, actions.sortBy("name"));
                 });
