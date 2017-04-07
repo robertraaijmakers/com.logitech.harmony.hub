@@ -44,59 +44,17 @@ var self = module.exports = {
                         return;
                     }
 					
-					console.log(args.args.device.commands);
-
-                    var listOfControlGroups = [];
-					
-					var obj = {
-						name: "select me",
-						label: "select me",
-						commands: args.args.device.commands,
-					};
-					
-					listOfControlGroups.push(obj);
-					
-					// for(var key = 0; key<args.args.device.commands.length; key += 1)
-					// {
-						// if (args.query.length === 0 || args.args.device.commands[key].name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
-							// listOfControlGroups.push(args.args.device.commands[key]);
-                        // }
-					// }
-					
-                    // args.args.device.commands.forEach(function(controlGroup) {
-                        // if (args.query.length === 0 || controlGroup.name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
-							// listOfControlGroups.push(controlGroup);
-                        // }
-                    // });
-
-                    callback(null, listOfControlGroups.sortBy("name"));
-                });
-
-        Homey.manager("flow")
-            .on("action.send_command_to_device.action.autocomplete",
-                function(callback, args) {
-                    //Homey.log(JSON.stringify(args));
-                    if (args.args.device.length === 0 || args.args.commands.length === 0) {
-                        callback(null, []);
-                        return;
-                    }
-					
-					for(var key = 0; key<args.args.controlGroup.commands.length; key += 1)
+                    var listOfControlGroups = [];					
+					for(var key in args.args.device.commands)
 					{
-						if (args.query.length === 0 || args.args.controlGroup.commands[key].name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
-							listOfControlGroups.push(args.args.controlGroup.commands[key]);
+						console.log("finding element at key: "+key);
+						console.log(args.args.device.commands[key]);
+						if (args.query.length === 0 || args.args.device.commands[key].name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
+							listOfControlGroups.push(args.args.device.commands[key]);
                         }
 					}
 
-                    // var actions = [];
-                    // args.args.commands.function.forEach(function(action) {
-                        // if (args.query.length === 0 || action.label.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
-                            // action.name = action.label;
-                            // actions.push(action);
-                        // }
-                    // });
-
-                    callback(null, actions.sortBy("name"));
+                    callback(null, listOfControlGroups.sortBy("name"));
                 });
 
         Homey.manager("flow")

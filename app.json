@@ -255,16 +255,8 @@
             "name": "controlGroup",
             "type": "autocomplete",
             "placeholder": {
-              "en": "Type",
-              "nl": "Soort"
-            }
-          },
-          {
-            "name": "action",
-            "type": "autocomplete",
-            "placeholder": {
               "en": "Command",
-              "nl": "Opdracht"
+              "nl": "Actie"
             }
           }
         ]

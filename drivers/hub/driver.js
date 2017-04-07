@@ -2,7 +2,6 @@
 var fs = require('fs')
 var path = require('path')
 var util = require('util')
-// var mqtt = require('mqtt');
 var express = require('express')
 var morgan = require('morgan')
 var bodyParser = require('body-parser')
@@ -13,7 +12,7 @@ var harmony = require('harmonyhubjs-client')
 
 var harmonyHubClients = {}
 var harmonyActivitiesCache = {}
-var harmonyActivityUpdateInterval = 1*60*1000 // 1 minute
+var harmonyActivityUpdateInterval = 5*60*1000 // 5 minutes
 var harmonyActivityUpdateTimers = {}
 
 var harmonyHubStates = {}
@@ -21,7 +20,7 @@ var harmonyStateUpdateInterval = 5*1000 // 5 seconds
 var harmonyStateUpdateTimers = {}
 
 var harmonyDevicesCache = {}
-var harmonyDeviceUpdateInterval = 1*60*1000 // 1 minute
+var harmonyDeviceUpdateInterval = 5*60*1000 // 5 minutes
 var harmonyDeviceUpdateTimers = {}
 
 var HomeyRegisteredDevices = {};
@@ -63,7 +62,7 @@ function startProcessing(hubSlug, harmonyClient){
   harmonyHubClients[hubSlug] = harmonyClient
   
   // Check if hub is a known Homey device
-  console.log("start processing");
+  console.log("Start processing");
 
   // update the list of activities
   updateActivities(hubSlug)
@@ -75,7 +74,7 @@ function startProcessing(hubSlug, harmonyClient){
   updateState(hubSlug)
   // update the list of activities on the set interval
   clearInterval(harmonyStateUpdateTimers[hubSlug])
-  harmonyStateUpdateTimers[hubSlug] = setInterval(function(){ updateState(hubSlug) }, harmonyStateUpdateInterval)
+  //harmonyStateUpdateTimers[hubSlug] = setInterval(function(){ updateState(hubSlug) }, harmonyStateUpdateInterval)
 
   // update devices
   updateDevices(hubSlug)
@@ -246,30 +245,6 @@ function cachedHarmonyDevices(hubSlug){
   })
 }
 
-function deviceBySlugs(hubSlug, deviceSlug){
-  var device
-  cachedHarmonyDevices(hubSlug).some(function(d) {
-    if(d.slug === deviceSlug) {
-      device = d
-      return true
-    }
-  })
-
-  return device
-}
-
-function commandBySlugs(hubSlug, deviceSlug, commandSlug){
-  var command
-  device = deviceBySlugs(hubSlug, deviceSlug)
-  if (device){
-    if (commandSlug in device.commands){
-      command = device.commands[commandSlug]
-    }
-  }
-
-  return command
-}
-
 function off(hubSlug){
   var harmonyHubClient = harmonyHubClients[hubSlug]
   if (!harmonyHubClient) { return }
@@ -288,13 +263,36 @@ function startActivity(hubSlug, activityId){
   })
 }
 
-function sendAction(hubSlug, action, repeat){
+function sendAction(hubSlug, deviceSlug, actionSlug, repeat){
   var repeat = Number.parseInt(repeat) || 1;
-  var harmonyHubClient = harmonyHubClients[hubSlug]
+  var harmonyHubClient = harmonyHubClients[hubSlug];
   if (!harmonyHubClient) { return }
 
-  var pressAction = 'action=' + action + ':status=press:timestamp=0';
-  var releaseAction =  'action=' + action + ':status=release:timestamp=55';
+  // Retrieve device
+  var devices = cachedHarmonyDevices(hubSlug);
+  
+  var curDevice = null;
+  devices.forEach(function(device) {
+		if (device.slug === deviceSlug) {
+			curDevice = device;
+		}
+	});
+	
+  if(curDevice === null)
+  {
+	  console.log("No matching device found for " + deviceSlug);
+	  return;
+  }
+  
+  // Retrieve action
+  var action = curDevice.commands[actionSlug];
+  console.log(action);
+  
+  console.log("Sending actual command");
+  console.log(action.action);
+  
+  var pressAction = 'action=' + action.action + ':status=press:timestamp=0';
+  var releaseAction =  'action=' + action.action + ':status=release:timestamp=55';
   for (var i = 0; i < repeat; i++) {
     harmonyHubClient.send('holdAction', pressAction).then(function (){
        harmonyHubClient.send('holdAction', releaseAction)
@@ -399,20 +397,20 @@ module.exports.capabilities = {
             if (device instanceof Error) return callback(device);
 
             // TODO: Get the current hub activity.
-            var currentActivity = null;
+            var curActivity = null;
 
             // ATHOM: Set the new activity, only when if differs from the current.
-            if (currentActivity !== activity) {
+            if (curActivity !== activity) {
                 // TODO: Set the new activity here.
                 module.exports.realtime(device_data, 'activity', activity);
                 updateHub(device_data.id);
             }
 
             // TODO: Refresh the current hub activity.
-            currentActivity = null;
+            curActivity = null;
 
             // ATHOM: send the new activity value to Homey.
-            callback(null, currentActivity);
+            callback(null, curActivity);
         }
     }
 }
@@ -477,50 +475,38 @@ module.exports.autocompleteDevice = function(args, callback) {
 * Action cards
 */
 module.exports.startActivity = function (args, callback) {
-    Log("Starting activity '" + args.activity.name + "' on " + args.hub.ip + "...");
-	
-	
 	var hubSlug = parameterize(args.hub.id);
-	var currentActivity = currentActivity(hubSlug)
+	var curActivity = currentActivity(hubSlug)
 	
-	if(typeof currentActivity === 'undefined' || typeof currentActivity.id === 'undefined')
+	if(typeof curActivity === 'undefined' || typeof curActivity.id === 'undefined')
 	{
+		Log("Starting activity '" + args.activity.name + "' on " + args.hub.ip + "...");
 		startActivity(hubSlug, args.activity.id);
 		callback(null, true);
+		return;
 	}
-	else if(currentActivity.id !== args.activity.id)
+	else if(curActivity.id !== args.activity.id)
 	{
+		Log("Switching activity to '" + args.activity.name + "' on " + args.hub.ip + "...");
 		startActivity(hubSlug, args.activity.id);
 		callback(null, true);
+		return;
 	}
 	
+	Log("Not starting activity '" + args.activity.name + "' on " + args.hub.ip + "...");
 	callback(null, false);
 };
 
 module.exports.sendCommandToDevice = function (args, callback) {
-    Log("Sending action to " + args.hub.ip + "...");
-
-    Log(JSON.stringify(args.action));
-	
-	sendAction(args.hub.id, args.action.action, 1);
+    Log("Sending action to " + args.hub.ip + "...");	
+	sendAction(args.hub.id, args.device.slug, args.controlGroup.slug, 1);
 	callback(null, true);
-
-    // GetClient(args.hub.id,
-        // function(error, client) {
-            // if (error) {
-                // Log("ERROR: " + JSON.stringify(error));
-                // callback(error, null);
-            // } else {
-                // var actionSent = SendAction(client, args.action.action);
-                // callback(null, actionSent);
-            // }
-        // });
 };
 
 module.exports.allOff = function(args, callback) {
     Log("Turning all devices off on " + args.hub.ip + "...");
 
-	off(parameterize(args.hub.id));
+	off(args.hub.id);
 	callback(null, true);
 };
 
