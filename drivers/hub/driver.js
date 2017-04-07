@@ -305,7 +305,6 @@ function sendAction(hubSlug, action, repeat){
 module.exports.init = function(devices_data, callback) {
     // ATHOM: When the driver starts, Homey rebooted. Initialize all previously paired devices.
     Log("Previously paired " + devices_data.length + " hub(s).");
-    //Log(JSON.stringify(devices_data));
 	
 	// Start discovery
 	discover.start();
@@ -338,24 +337,7 @@ module.exports.renamed = function(device_data, new_name) {
 }
 
 module.exports.deleted = function(device_data, callback) {
-    // ATHOM: run when the user has deleted the device from Homey
-    GetClient(device_data.id,
-        function(error, client) {
-            if (error) {
-                Log("ERROR: " + JSON.stringify(error));
-                callback(error, null);
-            } else {
-                // Stop refreshing the current activity.
-                clearInterval(Clients[device_data.id].interval);
-
-                // Disconnect from the hub.
-                client.end();
-                Log("Disconnected from device.");
-            }
-        });
-
-    delete Hubs[device_data.id];
-    delete Clients[device_data.id];
+    delete HomeyRegisteredDevices[device_data.id];
     callback(null, true);
 }
 
@@ -446,7 +428,7 @@ module.exports.autocompleteActivity = function(args, callback) {
     }
 
 	var activities = cachedHarmonyActivities(args.args.hub.id);
-]
+
 	if(typeof activities !== 'undefined' && activities.length > 0)
 	{
 		var hubActivities = [];
@@ -456,6 +438,7 @@ module.exports.autocompleteActivity = function(args, callback) {
 				outputActivity.name = activity.label;
 				outputActivity.icon = activity.icon;
 				outputActivity.hub = args.args.hub;
+				outputActivity.id = activity.id;				
 				hubActivities.push(outputActivity);
 			}
 		});
@@ -495,6 +478,32 @@ module.exports.autocompleteDevice = function(args, callback) {
 */
 module.exports.startActivity = function (args, callback) {
     Log("Starting activity '" + args.activity.name + "' on " + args.hub.ip + "...");
+	
+	
+	var hubSlug = parameterize(args.hub.id);
+	var currentActivity = currentActivity(hubSlug)
+	
+	if(typeof currentActivity === 'undefined' || typeof currentActivity.id === 'undefined')
+	{
+		startActivity(hubSlug, args.activity.id);
+		callback(null, true);
+	}
+	else if(currentActivity.id !== args.activity.id)
+	{
+		startActivity(hubSlug, args.activity.id);
+		callback(null, true);
+	}
+	
+	callback(null, false);
+};
+
+module.exports.sendCommandToDevice = function (args, callback) {
+    Log("Sending action to " + args.hub.ip + "...");
+
+    Log(JSON.stringify(args.action));
+	
+	sendAction(args.hub.id, args.action.action, 1);
+	callback(null, true);
 
     // GetClient(args.hub.id,
         // function(error, client) {
@@ -502,75 +511,10 @@ module.exports.startActivity = function (args, callback) {
                 // Log("ERROR: " + JSON.stringify(error));
                 // callback(error, null);
             // } else {
-                // client.isOff()
-                    // .then(function(off) {
-                            // if (off) {
-                                // Log("- Hub status: off");
-                                // Log("Starting activity...");
-                                // StartActivity(function(error, started) {
-                                        // if (error) {
-                                            // Log("Starting activity failed: ");
-                                            // Log(JSON.stringify(error));
-                                            // callback(error, null);
-                                        // } else {
-                                            // callback(null, started);
-                                        // }
-                                    // },
-                                    // client,
-                                    // args.activity.id);
-                            // } else {
-                                // Log("- Hub status: on");
-                                // client.getCurrentActivity()
-                                    // .then(function(currentActivityId) {
-                                            // Log("Current activity id: " + currentActivityId);
-                                            // Log("Requested activity id: " + args.activity.id);
-                                            // if (currentActivityId !== args.activity.id) {
-                                                // Log("Switching activity...");
-                                                // StartActivity(function(error, started) {
-                                                        // if (error) {
-                                                            // Log("Switching activity failed: ");
-                                                            // Log(JSON.stringify(error));
-                                                            // callback(error, null);
-                                                        // } else {
-                                                            // callback(null, started);
-                                                        // }
-                                                    // },
-                                                    // client,
-                                                    // args.activity.id);
-                                            // } else {
-                                                // Log("Requested activity already selected.");
-                                                // callback(null, true);
-                                            // }
-                                        // },
-                                        // function(error) {
-                                            // LogError("Get current activity failed: " + JSON.stringify(error));
-                                            // callback(error, null);
-                                        // });
-                            // }
-                        // },
-                        // function(error) {
-                            // LogError("Unable to determine client state: " + JSON.stringify(error));
-                            // callback(error, null);
-                        // });
+                // var actionSent = SendAction(client, args.action.action);
+                // callback(null, actionSent);
             // }
         // });
-};
-
-module.exports.sendCommandToDevice = function (args, callback) {
-    Log("Sending action to " + args.hub.ip + "...");
-
-    //Log(JSON.stringify(args.action));
-
-    GetClient(args.hub.id,
-        function(error, client) {
-            if (error) {
-                Log("ERROR: " + JSON.stringify(error));
-                callback(error, null);
-            } else {
-                var actionSent = SendAction(client, args.action.action);
-                callback(null, actionSent);
-            }
-        });
 };
 
 module.exports.allOff = function(args, callback) {
@@ -608,7 +552,7 @@ function MapHubToDeviceData(hub) {
         name: hub.friendlyName,
         data: {
             // this data object is saved to- and unique for the device. It is passed on the get and set functions as 1st argument
-            id: hub.uuid, // something unique, so your driver knows which physical device it is. A MAC address or Node ID, for example. This is required
+            id: parameterize(hub.uuid), // something unique, so your driver knows which physical device it is. A MAC address or Node ID, for example. This is required
             name: hub.host_name,
             friendlyName: hub.friendlyName,
             ip: hub.ip
@@ -628,67 +572,6 @@ function GetHubByData(device_data) {
     } else {
         return device;
     }
-}
-
-
-
-/**
- * Gets the name of the activity with the given Id.
- * 
- * @param {} device_data_id
- * @param {} activityId
- * @param {} callback
- */
-function GetActivityName(device_data_id, activityId, callback) {
-    if (Clients[device_data_id].activities) {
-        Clients[device_data_id].activities.forEach(function (activity) {
-            if (activity.id === activityId) {
-                if (callback) callback(null, activity.label);
-            }
-        });
-    }
-}
-
-/**
- * Starts the specified activity through the given harmony client.
- * 
- * @param {} client 
- * @param {} activityName 
- * @returns {} true/false
- */
-function StartActivity(callback, client, activityId) {
-    client.getActivities()
-        .then(function(activities) {
-                var started = activities.some(function(activity) {
-                    if (activity.id === activityId) {
-                        // Found the activity we want.
-                        client.startActivity(activity.id);
-                        return true;
-                    } else {
-                        return false;
-                    }
-                });
-
-                callback(null, started);
-            },
-            function(error) {
-                LogError("Get activities failed: " + JSON.stringify(error));
-                callback(error, null);
-            });
-}
-
-/**
- * Sends the specified command through the given harmony client.
- * 
- * @param {} client 
- * @param {} action 
- * @returns {} true/false 
- */
-function SendAction(client, action) {
-    var encodedAction = action.replace(/\:/g, "::");
-    client.send("holdAction", "action=" + encodedAction + ":status=press");
-    Log("Action sent.");
-    return true;
 }
 
 // /**

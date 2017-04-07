@@ -47,11 +47,27 @@ var self = module.exports = {
 					console.log(args.args.device.commands);
 
                     var listOfControlGroups = [];
-                    args.args.device.commands.forEach(function(controlGroup) {
-                        if (args.query.length === 0 || controlGroup.name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
-							listOfControlGroups.push(controlGroup);
-                        }
-                    });
+					
+					var obj = {
+						name: "select me",
+						label: "select me",
+						commands: args.args.device.commands,
+					};
+					
+					listOfControlGroups.push(obj);
+					
+					// for(var key = 0; key<args.args.device.commands.length; key += 1)
+					// {
+						// if (args.query.length === 0 || args.args.device.commands[key].name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
+							// listOfControlGroups.push(args.args.device.commands[key]);
+                        // }
+					// }
+					
+                    // args.args.device.commands.forEach(function(controlGroup) {
+                        // if (args.query.length === 0 || controlGroup.name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
+							// listOfControlGroups.push(controlGroup);
+                        // }
+                    // });
 
                     callback(null, listOfControlGroups.sortBy("name"));
                 });
@@ -64,6 +80,13 @@ var self = module.exports = {
                         callback(null, []);
                         return;
                     }
+					
+					for(var key = 0; key<args.args.controlGroup.commands.length; key += 1)
+					{
+						if (args.query.length === 0 || args.args.controlGroup.commands[key].name.toUpperCase().indexOf(args.query.toUpperCase()) !== -1) {
+							listOfControlGroups.push(args.args.controlGroup.commands[key]);
+                        }
+					}
 
                     // var actions = [];
                     // args.args.commands.function.forEach(function(action) {
