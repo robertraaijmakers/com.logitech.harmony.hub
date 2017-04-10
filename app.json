@@ -84,6 +84,27 @@
           }
         ]
       },
+	  {
+        "id": "activity_start_requested_device",
+        "title": {
+          "en": "Activity start requested",
+          "nl": "Activiteit starten gevraagd"
+        },
+        "tokens": [
+          {
+            "name": "activity",
+            "title": {
+              "en": "activity",
+              "nl": "activiteit"
+            }
+          }
+        ],
+		"args": [{
+			"name": "device",
+			"type": "device",
+			"filter": "driver_id=hub"
+		}]
+      },
       {
         "id": "activity_starting",
         "title": {
@@ -106,6 +127,27 @@
             }
           }
         ]
+      },
+      {
+        "id": "activity_starting_device",
+        "title": {
+          "en": "Activity starting",
+          "nl": "Activiteit bezig met starten"
+        },
+        "tokens": [
+          {
+            "name": "activity",
+            "title": {
+              "en": "activity",
+              "nl": "activiteit"
+            }
+          }
+        ],
+		"args": [{
+			"name": "device",
+			"type": "device",
+			"filter": "driver_id=hub"
+		}]
       },
       {
         "id": "activity_started",
@@ -131,6 +173,27 @@
         ]
       },
       {
+        "id": "activity_started_device",
+        "title": {
+          "en": "Activity started",
+          "nl": "Activiteit gestart"
+        },
+        "tokens": [
+          {
+            "name": "activity",
+            "title": {
+              "en": "activity",
+              "nl": "activiteit"
+            }
+          }
+        ],
+		"args": [{
+			"name": "device",
+			"type": "device",
+			"filter": "driver_id=hub"
+		}]
+      },
+      {
         "id": "activity_stop_requested",
         "title": {
           "en": "Activity stop requested",
@@ -152,6 +215,27 @@
             }
           }
         ]
+      },
+      {
+        "id": "activity_stop_requested_device",
+        "title": {
+          "en": "Activity stop requested",
+          "nl": "Activiteit stoppen gevraagd"
+        },
+        "tokens": [
+          {
+            "name": "activity",
+            "title": {
+              "en": "activity",
+              "nl": "activiteit"
+            }
+          }
+        ],
+		"args": [{
+			"name": "device",
+			"type": "device",
+			"filter": "driver_id=hub"
+		}]
       },
       {
         "id": "activity_stopping",
@@ -177,6 +261,27 @@
         ]
       },
       {
+        "id": "activity_stopping_device",
+        "title": {
+          "en": "Activity stopping",
+          "nl": "Activiteit bezig met stoppen"
+        },
+        "tokens": [
+          {
+            "name": "activity",
+            "title": {
+              "en": "activity",
+              "nl": "activiteit"
+            }
+          }
+        ],
+		"args": [{
+			"name": "device",
+			"type": "device",
+			"filter": "driver_id=hub"
+		}]
+      },
+      {
         "id": "all_turned_off",
         "title": {
           "en": "All devices turned off",
@@ -191,6 +296,18 @@
             }
           }
         ]
+      },
+      {
+        "id": "all_turned_off_device",
+        "title": {
+          "en": "All devices turned off",
+          "nl": "Alle apparaten uitgeschakeld"
+        },
+		"args": [{
+			"name": "device",
+			"type": "device",
+			"filter": "driver_id=hub"
+		}]
       }
     ],
     "conditions": [],

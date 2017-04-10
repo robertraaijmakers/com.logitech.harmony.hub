@@ -37,28 +37,54 @@ var discover = new harmonyHubDiscover(61991)
 	  if (hubInfo.ip) {
 		console.log("Hub has IP, try to create harmony client");
 		harmony(hubInfo.ip).then(function(client) {
-		  startProcessing(parameterize(hubInfo.uuid), client)
+		  startProcessing(parameterize(hubInfo.uuid), client, hubInfo)
 		})
 	  }
 	})
 
 	discover.on('offline', function(hubInfo) {
 	  // Triggered when a hub disappeared
-	  console.log('Hub lost: ' + hubInfo.uuid + ' at ' + hubInfo.ip + '.')
+	  console.log('Hub lost: ' + hubInfo.uuid + ' at ' + hubInfo.ip + '.');
 	  if (!hubInfo.uuid) { return }
-	  var hubSlug = parameterize(hubInfo.uuid)
-
-	  clearInterval(harmonyStateUpdateTimers[hubSlug])
-	  clearInterval(harmonyActivityUpdateTimers[hubSlug])
-	  delete(harmonyHubClients[hubSlug])
-	  delete(harmonyActivitiesCache[hubSlug])
-	  delete(harmonyHubStates[hubSlug])
-	})
+	  var hubSlug = parameterize(hubInfo.uuid);
+	  
+	  stopProcessing(hubSlug);
+	});
 
 /**
 * Helper functions
 */
-function startProcessing(hubSlug, harmonyClient){
+function startProcessing(hubSlug, harmonyClient, hubInfo){
+	
+	harmonyClient.hubInfo = hubInfo;
+	
+	harmonyClient._xmppClient.on("error",
+		function (e) {
+			LogError("Client for hub " + device_data.id + " reported an error: ", e);
+			// Disconnect, and re-connect!
+			stopProcessing(hubSlug);
+		});
+
+	harmonyClient._xmppClient.on("offline",
+		function () {
+			// We need to re-establish a connection...
+			stopProcessing(hubSlug);
+		});
+
+	harmonyClient.on("stateDigest",
+		function(stateDigest) {
+			HandleStateChange(stateDigest, hubSlug);
+		});
+		
+	if(typeof harmonyClient._xmppClient.connection !== 'undefined')
+	{
+		if(typeof harmonyClient._xmppClient.connection.connected !== 'undefined')
+		{
+			console.log("Is connected");
+			Log(harmonyClient._xmppClient.connection.connected);
+		}
+	}
+	
   harmonyHubClients[hubSlug] = harmonyClient
   
   // Check if hub is a known Homey device
@@ -81,6 +107,15 @@ function startProcessing(hubSlug, harmonyClient){
   // update the list of devices on the set interval
   clearInterval(harmonyDeviceUpdateTimers[hubSlug])
   harmonyDeviceUpdateTimers[hubSlug] = setInterval(function(){ updateDevices(hubSlug) }, harmonyDeviceUpdateInterval)
+}
+
+function stopProcessing(hubSlug)
+{
+	clearInterval(harmonyStateUpdateTimers[hubSlug])
+	clearInterval(harmonyActivityUpdateTimers[hubSlug])
+	delete(harmonyHubClients[hubSlug])
+	delete(harmonyActivitiesCache[hubSlug])
+	delete(harmonyHubStates[hubSlug])
 }
 
 function updateActivities(hubSlug){
@@ -135,22 +170,6 @@ function updateState(hubSlug){
 
       // cache state for later
       harmonyHubStates[hubSlug] = data
-
-      // if (!previousActivity || (activity.id != previousActivity.id)) {
-        // publish('hubs/' + hubSlug + '/' + 'current_activity', activity.slug, {retain: true})
-        // publish('hubs/' + hubSlug + '/' + 'state', activity.id == -1 ? 'off' : 'on' , {retain: true})
-
-        // for (var i = 0; i < cachedHarmonyActivities(hubSlug).length; i++) {
-          // activities = cachedHarmonyActivities(hubSlug)
-          // cachedActivity = activities[i]
-
-          // if (activity == cachedActivity) {
-            // publish('hubs/' + hubSlug + '/' + 'activities/' + cachedActivity.slug + '/state', 'on', {retain: true})
-          // }else{
-            // publish('hubs/' + hubSlug + '/' + 'activities/' + cachedActivity.slug + '/state', 'off', {retain: true})
-          // }
-        // }
-      // }
     })
   } catch(err) {
     console.log("ERROR: " + err.message);
@@ -289,7 +308,6 @@ function sendAction(hubSlug, deviceSlug, actionSlug, repeat){
   console.log(action);
   
   console.log("Sending actual command");
-  console.log(action.action);
   
   var pressAction = 'action=' + action.action + ':status=press:timestamp=0';
   var releaseAction =  'action=' + action.action + ':status=release:timestamp=55';
@@ -335,7 +353,7 @@ module.exports.renamed = function(device_data, new_name) {
 }
 
 module.exports.deleted = function(device_data, callback) {
-    delete HomeyRegisteredDevices[device_data.id];
+    delete(HomeyRegisteredDevices[device_data.id]);
     callback(null, true);
 }
 
@@ -359,9 +377,15 @@ module.exports.pair = function(socket) {
     socket.on("list_devices",
         function(data, callback) {
 			var listOfDevices = [];
-			harmonyHubClients.forEach(function(hub) {
-				listOfDevices.push(MapHubToDeviceData(hub));
-			});
+			for(var client in harmonyHubClients)
+			{
+				console.log("Identified client");
+				if(typeof HomeyRegisteredDevices[client] === 'undefined')
+				{
+					console.log("Adding hub");
+					listOfDevices.push(MapHubToDeviceData(client, harmonyHubClients[client]));
+				}
+			}
 
 			// err, result style
 			callback(null, listOfDevices);
@@ -444,6 +468,11 @@ module.exports.autocompleteActivity = function(args, callback) {
 		callback(null, hubActivities);
 		return;
 	}
+	else
+	{
+		console.log("Getting activities, unlikely that activities list should be empty.");
+		updateActivities(args.args.hub.id);
+	}
 	
 	callback(null, []);
 };
@@ -476,7 +505,7 @@ module.exports.autocompleteDevice = function(args, callback) {
 */
 module.exports.startActivity = function (args, callback) {
 	var hubSlug = parameterize(args.hub.id);
-	var curActivity = currentActivity(hubSlug)
+	var curActivity = currentActivity(hubSlug);
 	
 	if(typeof curActivity === 'undefined' || typeof curActivity.id === 'undefined')
 	{
@@ -530,18 +559,19 @@ function InitDevice(device_data, callback) {
  * @param {} hub
  * @returns {} device_data
  */
-function MapHubToDeviceData(hub) {
+function MapHubToDeviceData(hubSlug, hub) {
 	
+	Log(hubSlug);
 	Log(hub);
 	
     return {
-        name: hub.friendlyName,
+        name: hub.hubInfo.friendlyName,
         data: {
             // this data object is saved to- and unique for the device. It is passed on the get and set functions as 1st argument
-            id: parameterize(hub.uuid), // something unique, so your driver knows which physical device it is. A MAC address or Node ID, for example. This is required
-            name: hub.host_name,
-            friendlyName: hub.friendlyName,
-            ip: hub.ip
+            id: hubSlug, // something unique, so your driver knows which physical device it is. A MAC address or Node ID, for example. This is required
+            name: hub.hubInfo.host_name,
+            friendlyName: hub.hubInfo.friendlyName,
+            ip: hub.hubInfo.ip
         }
     };
 }
@@ -560,98 +590,90 @@ function GetHubByData(device_data) {
     }
 }
 
-// /**
- // * Handles a state digest by raising appropriate events.
- // * 
- // * @param {} stateDigest
- // * @param {} device_data
- // */
-// function HandleStateChange(stateDigest, device_data) {
-    // switch (stateDigest.activityStatus) {
-    // case 0:
-        // if (stateDigest.runningActivityList.length === 0) {
-            // Homey.manager("flow").trigger("all_turned_off", { hub_name: device_data.name });
-            // Log("Activity: Stopped.");
-        // } else {
-            // GetActivityName(device_data.id,
-                // stateDigest.runningActivityList,
-                // function(error, activityName) {
-                    // Homey.manager("flow")
-                        // .trigger("activity_stopping", { hub_name: device_data.name, activity: activityName });
-                    // Log("Activity '" + activityName + "' (" + stateDigest.runningActivityList + "): Stopping...");
-                // });
-        // }
-        // break;
-    // case 1:
-        // GetActivityName(device_data.id,
-            // stateDigest.activityId,
-            // function (error, activityName) {
-                // Homey.manager("flow")
-                    // .trigger("activity_start_requested", { hub_name: device_data.name, activity: activityName });
-                // Log("Activity '" + activityName + "' (" + stateDigest.activityId + "): Start requested.");
-            // });
-        // break;
-    // case 2:
-        // if (stateDigest.activityId === stateDigest.runningActivityList) {
-            // GetActivityName(device_data.id,
-                // stateDigest.runningActivityList,
-                // function (error, activityName) {
-                    // Homey.manager("flow")
-                        // .trigger("activity_started", { hub_name: device_data.name, activity: activityName });
-                    // Log("Activity '" + activityName + "' (" + stateDigest.runningActivityList + "): Started.");
-                // });
-        // } else {
-            // GetActivityName(device_data.id,
-                // stateDigest.activityId,
-                // function (error, activityName) {
-                    // Homey.manager("flow")
-                        // .trigger("activity_starting", { hub_name: device_data.name, activity: activityName });
-                    // Log("Activity '" + activityName + "' (" + stateDigest.activityId + "): Starting...");
-                // });
-        // }
-        // break;
-    // case 3:
-        // GetActivityName(device_data.id,
-            // stateDigest.runningActivityList,
-            // function (error, activityName) {
-                // Homey
-                    // .manager("flow")
-                    // .trigger("activity_stop_requested", { hub_name: device_data.name, activity: activityName });
-                // Log("Activity '" + activityName + "' (" + stateDigest.runningActivityList + "): Stop requested.");
-            // });
-        // break;
-    // default:
-        // Log("ATTENTION: Unhandled state digest:");
-        // Log(JSON.stringify(stateDigest));
-        // break;
-    // }
-// }
-
 /**
- * Gets the Client for the Hub with the given Id.
+ * Handles a state digest by raising appropriate events.
  * 
- * @param {} device_data_id
- * @param {} callback
+ * @param {} stateDigest
+ * @param {} device_data
  */
-function GetClient(device_data_id, callback) {
-    var client = null;
-    var clientStruct = harmonyHubClients[parameterize(device_data_id)];
-    var error;
-    if (!clientStruct) {
-        error = "Hub with Id '" + device_data_id + "' not found. Possibly the Hub is currently unreachable or its internal Id has changed. Please try removing your hub and re-adding it.";
-    } else {
-        error = null;
-    }
+function HandleStateChange(stateDigest, hubSlug) {
+	
+	console.log(stateDigest);
+	console.log(hubSlug);
+	
+	var deviceData = HomeyRegisteredDevices[hubSlug];
+	if(typeof deviceData === 'undefined')
+	{
+		console.log("This device is not monitored by Homey");
+		return;
+	}
+	
+	console.log("State changed, handling state change");
+	var curActivity = currentActivity(hubSlug);
+	var stateActivity = harmonyActivitiesCache[hubSlug][stateDigest.activityId];
+	
+	console.log("Current activity: ");
+	console.log(curActivity);
+	console.log("State activity: ");
+	console.log(stateActivity);
 
-    if (!error) {
-        client = clientStruct.client;
+    switch (stateDigest.activityStatus) {
+		case 0:
+			if (stateDigest.runningActivityList.length === 0) {
+				Homey.manager("flow").trigger("all_turned_off", { hub_name: deviceData.data.name });
+				Homey.manager('flow').triggerDevice('all_turned_off_device', { }, { }, deviceData.data, function(err, result) {
+								if( err ){ console.log(err); return Homey.error(err); }
+							});
+				
+				// Set activity as current activity
+				updateState(hubSlug);
+							
+				Log("Activity: Stopped.");
+			} else {
+				Homey.manager("flow").trigger("activity_stopping", { hub_name: deviceData.data.name, activity: stateActivity.label });
+				Homey.manager('flow').triggerDevice('activity_stopping_device', { activity: stateActivity.label }, { }, deviceData.data, function(err, result) {
+					if( err ){ console.log(err); return Homey.error(err); }
+				});
+				
+				Log("Activity '" + stateActivity.label + "' (" + stateDigest.runningActivityList + "): Stopping...");
+			}
+			break;
+		case 1:
+			Homey.manager("flow").trigger("activity_start_requested", { hub_name: deviceData.data.name, activity: stateActivity.label });
+			Homey.manager('flow').triggerDevice('activity_start_requested_device', { activity: stateActivity.label }, { }, deviceData.data, function(err, result) {
+								if( err ){ console.log(err); return Homey.error(err); }
+							});
+			Log("Activity '" + stateActivity.label + "' (" + stateDigest.activityId + "): Start requested.");
+			break;
+		case 2:
+			if (stateDigest.activityId === stateDigest.runningActivityList) {
+				Homey.manager("flow").trigger("activity_started", { hub_name: deviceData.data.name, activity: stateActivity.label });
+				Homey.manager('flow').triggerDevice('activity_started_device', { activity: stateActivity.label }, { }, deviceData.data, function(err, result) {
+								if( err ){ console.log(err); return Homey.error(err); }
+							});
+				Log("Activity '" + stateActivity.label + "' (" + stateDigest.runningActivityList + "): Started.");
+				
+				// Set activity as current activity
+				updateState(hubSlug);
+			} else {
+				Homey.manager("flow").trigger("activity_starting", { hub_name: deviceData.data.name, activity: stateActivity.label });
+				Homey.manager('flow').triggerDevice('activity_starting_device', { activity: stateActivity.label }, { }, deviceData.data, function(err, result) {
+								if( err ){ console.log(err); return Homey.error(err); }
+							});
+			}
+			break;
+		case 3:
+			Homey.manager("flow").trigger("activity_stop_requested", { hub_name: deviceData.data.name, activity: stateActivity.label });
+			Homey.manager('flow').triggerDevice('activity_stop_requested_device', { activity: stateActivity.label }, { }, deviceData.data, function(err, result) {
+								if( err ){ console.log(err); return Homey.error(err); }
+							});
+			Log("Activity '" + stateActivity.label + "' (" + stateDigest.runningActivityList + "): Stop requested.");
+			break;
+		default:
+			Log("ATTENTION: Unhandled state digest:");
+			Log(JSON.stringify(stateDigest));
+			break;
     }
-
-    if (!client) {
-        error = "Client for Hub with Id '" + device_data_id + "' not available (yet). Please try again in 10 seconds or so...";
-    }
-
-    callback(error, client);
 }
 
 /**
