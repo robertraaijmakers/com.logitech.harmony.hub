@@ -214,3 +214,5 @@ ModelManifest.xml
 # Make sure "debug" package is not ignored
 !node_modules/debug
 node_modules/debug/*/
+!node_modules/express
+node_modules/express/*/
