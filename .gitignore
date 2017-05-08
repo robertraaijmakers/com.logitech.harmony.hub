@@ -216,3 +216,7 @@ ModelManifest.xml
 node_modules/debug/*/
 !node_modules/express
 node_modules/express/*/
+!node_modules/express/lib/
+node_modules/express/lib/*/
+!node_modules/express/node_modules/
+node_modules/express/node_modules/*/
