@@ -1,12 +1,17 @@
 {
-  "name": "com.logitech.harmony.hub",
-  "version": "0.3.3",
-  "description": "Control your Logitech Harmony Hub with Homey",
-  "main": "api.js",
-  "dependencies": {
-    "harmonyhubjs-client": "^1.1.8",
+ "name": "com.logitech.harmony.hub",
+ "version": "0.3.4",
+ "description": "Control your Logitech Harmony Hub with Homey",
+ "main": "api.js",
+ "dependencies": {
+    "harmonyhubjs-client": "^1.1.10",
     "harmonyhubjs-discover": "^1.0.2",
-    "moment": "^2.17.1"
+    "moment": "^2.18.1",
+    "express": "^4.15.2",
+    "debug": "^2.6.6",
+    "morgan": "^1.8.1",
+    "body-parser": "^1.17.1",
+    "parameterize": "^0.0.7"
   },
   "devDependencies": {
     "dedupe": "^1.0.2"
